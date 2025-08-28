@@ -180,4 +180,50 @@ class LoanApplicationUseCaseTest {
                 .expectError(IllegalArgumentException.class)
                 .verify();
     }
+
+    @Test
+    void testProcessLoanApplicationWithAmountAboveMaximum() {
+        LoanApplicationRequest invalidRequest = new LoanApplicationRequest(
+                "123456789",
+                new BigDecimal("1000000000000001"),
+                12,
+                "Personal"
+        );
+
+        StepVerifier.create(loanApplicationUseCase.processLoanApplication(invalidRequest))
+                .expectError(IllegalArgumentException.class)
+                .verify();
+    }
+
+    @Test
+    void testProcessLoanApplicationWithTermAboveMaximum() {
+        LoanApplicationRequest invalidRequest = new LoanApplicationRequest(
+                "123456789",
+                new BigDecimal("5000000"),
+                361, // MAX + 1
+                "Personal"
+        );
+
+        StepVerifier.create(loanApplicationUseCase.processLoanApplication(invalidRequest))
+                .expectError(IllegalArgumentException.class)
+                .verify();
+    }
+
+    @Test
+    void testProcessLoanApplicationCallsSave() {
+        LoanApplication expectedApplication = new LoanApplication(
+                "123456789",
+                new BigDecimal("5000000"),
+                12,
+                "Personal"
+        );
+
+        when(loanApplicationGateway.save(any(LoanApplication.class)))
+                .thenReturn(Mono.just(expectedApplication));
+
+        StepVerifier.create(loanApplicationUseCase.processLoanApplication(validRequest))
+                .expectNextMatches(app -> app.getClientDocument().equals("123456789"))
+                .verifyComplete();
+    }
+
 }

@@ -38,23 +38,23 @@ public class LoanApplicationUseCase {
 
     private Mono<LoanApplicationRequest> validateRequest(LoanApplicationRequest request) {
         if (request.getClientDocument() == null || request.getClientDocument().trim().isEmpty()) {
-            return Mono.error(new IllegalArgumentException("Client document is required"));
+            return Mono.error(new IllegalArgumentException("El documento del cliente es obligatorio"));
         }
 
         if (request.getAmount() == null || request.getAmount().compareTo(MIN_AMOUNT) < 0) {
-            return Mono.error(new IllegalArgumentException("Minimum amount is " + MIN_AMOUNT));
+            return Mono.error(new IllegalArgumentException("El monto minimo es " + MIN_AMOUNT));
         }
 
         if (request.getAmount().compareTo(MAX_AMOUNT) > 0) {
-            return Mono.error(new IllegalArgumentException("Maximum amount is " + MAX_AMOUNT));
+            return Mono.error(new IllegalArgumentException("El monto maximo es " + MAX_AMOUNT));
         }
 
         if (request.getTermMonths() == null || request.getTermMonths() < MIN_TERM) {
-            return Mono.error(new IllegalArgumentException("Minimum term is " + MIN_TERM + " month(s)"));
+            return Mono.error(new IllegalArgumentException("El termino minimo es " + MIN_TERM + " mes(es)"));
         }
 
         if (request.getTermMonths() > MAX_TERM) {
-            return Mono.error(new IllegalArgumentException("Maximum term is " + MAX_TERM + " months"));
+            return Mono.error(new IllegalArgumentException("El termino maximo es " + MAX_TERM + " mes(es)"));
         }
 
         if (request.getLoanType() == null || request.getLoanType().trim().isEmpty()) {
