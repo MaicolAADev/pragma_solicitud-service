@@ -144,5 +144,4 @@ public class LoanApplicationUseCase implements LoanApplicationInputPort {
             ));
         }
     }
-
 }
