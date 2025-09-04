@@ -1,0 +1,52 @@
+name: solicitudes-service
+services:
+  solicitudes-db:
+    image: postgres:15-alpine
+    container_name: solicitudes-db
+    environment:
+      POSTGRES_DB: solicitudes
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - solicitudes_data:/var/lib/postgresql/data
+    networks:
+      - crediya-net
+
+  solicitudes-app:
+    build:
+      context: ..
+      dockerfile: deployment/Dockerfile
+    container_name: solicitudes-app
+    depends_on:
+      - solicitudes-db
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      SPRING_R2DBC_URL: r2dbc:postgresql://solicitudes-db:5432/solicitudes
+      SPRING_R2DBC_USERNAME: postgres
+      SPRING_R2DBC_PASSWORD: postgres
+    ports:
+      - "8082:8082"
+    networks:
+      - crediya-net
+
+  pgadmin:
+    image: dpage/pgadmin4:8
+    container_name: pgadmin_solicitudes
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@admin.com
+      PGADMIN_DEFAULT_PASSWORD: admin
+    ports:
+      - "5050:80"
+    networks:
+      - crediya-net
+    depends_on:
+      - solicitudes-db
+
+volumes:
+  solicitudes_data:
+
+networks:
+  crediya-net:
+    external: true
