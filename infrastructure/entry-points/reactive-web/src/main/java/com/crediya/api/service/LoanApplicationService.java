@@ -157,7 +157,7 @@ public class LoanApplicationService {
                     return response.bodyToMono(String.class)
                             .flatMap(errorBody -> Mono.error(new ArgumentException("Error interno: " + response.statusCode() + " - " + errorBody)));
                 })
-                .bodyToMono(TokenInfoResponse.class) // ← ¡Cambio importante aquí!
+                .bodyToMono(TokenInfoResponse.class)
                 .doOnNext(tokenInfo -> log.debug("Token info recibido: {}", tokenInfo))
                 .flatMap(tokenInfo -> {
                     if (!tokenInfo.valid()) {
@@ -169,15 +169,15 @@ public class LoanApplicationService {
                 })
                 .onErrorResume(WebClientResponseException.Unauthorized.class, error -> {
                     log.error("Token no autorizado: {}", error.getResponseBodyAsString());
-                    return Mono.error(new ArgumentException("Token no autorizado: " + error.getResponseBodyAsString()));
+                    return Mono.error(new UnhautorizedException("Token no autorizado: " + error.getResponseBodyAsString()));
                 })
                 .onErrorResume(WebClientResponseException.Forbidden.class, error -> {
                     log.error("Acceso prohibido: {}", error.getResponseBodyAsString());
-                    return Mono.error(new ArgumentException("Acceso prohibido: " + error.getResponseBodyAsString()));
+                    return Mono.error(new ForbbidenException("Acceso prohibido: " + error.getResponseBodyAsString()));
                 })
                 .onErrorResume(error -> {
                     log.error("Error al validar token: {}", error.getMessage());
-                    return Mono.error(new ArgumentException("Error de autenticación: " + error.getMessage()));
+                    return Mono.error(new UnhautorizedException("Error de autenticación: " + error.getMessage()));
                 });
     }
 
