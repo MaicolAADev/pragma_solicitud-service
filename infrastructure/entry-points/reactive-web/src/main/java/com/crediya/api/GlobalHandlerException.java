@@ -65,11 +65,21 @@ public class GlobalHandlerException {
     }
 
 
+    @ExceptionHandler(RuntimeException.class)
+    public ResponseEntity<Map<String, Object>> handleGenericException2(Exception ex) {
+        return buildErrorResponse(
+                HttpStatus.BAD_REQUEST,
+                "BAD_REQUEST",
+                Arrays.asList(ex.getMessage())
+        );
+    }
+
+
     @ExceptionHandler(Exception.class)
     public ResponseEntity<Map<String, Object>> handleGenericException(Exception ex) {
         return buildErrorResponse(
                 HttpStatus.INTERNAL_SERVER_ERROR,
-                "INTERNAL_ERROR",
+                "INTERNAL_SERVER_ERROR",
                 Arrays.asList(ex.getMessage())
         );
     }

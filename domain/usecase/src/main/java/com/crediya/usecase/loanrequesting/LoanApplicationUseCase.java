@@ -8,6 +8,7 @@ import com.crediya.model.loantype.LoanType;
 import com.crediya.model.loantype.gateways.LoanTypeRepository;
 import com.crediya.model.state.State;
 import com.crediya.model.state.gateways.StateRepository;
+import com.crediya.usecase.exception.ArgumentException;
 import reactor.core.publisher.Mono;
 import reactor.util.annotation.Nullable;
 
@@ -37,9 +38,9 @@ public class LoanApplicationUseCase implements LoanApplicationInputPort {
 
         return Mono.zip(
                         loanTypeRepository.getLoanTypeByName(loanApplication.getLoanType())
-                                .switchIfEmpty(Mono.error(new RuntimeException("El tipo de préstamo no existe"))),
+                                .switchIfEmpty(Mono.error(new ArgumentException("El tipo de préstamo no existe"))),
                         stateRepository.getStateByName(INITIAL_STATE)
-                                .switchIfEmpty(Mono.error(new RuntimeException("El estado inicial no existe")))
+                                .switchIfEmpty(Mono.error(new ArgumentException("El estado inicial no existe")))
                 ).flatMap(tuple -> {
                     LoanType loanTypeEntity = tuple.getT1();
                     State stateEntity = tuple.getT2();
@@ -132,13 +133,13 @@ public class LoanApplicationUseCase implements LoanApplicationInputPort {
     private void validateAmount(BigDecimal amount) {
         Objects.requireNonNull(amount, "El monto no puede ser nulo");
         if (amount.signum() <= 0) {
-            throw new IllegalArgumentException("El monto debe ser mayor que cero");
+            throw new ArgumentException("El monto debe ser mayor que cero");
         }
     }
 
     private void validateAmountWithinLoanType(BigDecimal amount, LoanType loanType) {
         if (amount.compareTo(loanType.getMinAmount()) < 0 || amount.compareTo(loanType.getMaxAmount()) > 0) {
-            throw new IllegalArgumentException(String.format(
+            throw new ArgumentException(String.format(
                     "El monto %.2f no está dentro del rango permitido [%.2f - %.2f] para el tipo de préstamo %s",
                     amount, loanType.getMinAmount(), loanType.getMaxAmount(), loanType.getName()
             ));
