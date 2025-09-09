@@ -73,4 +73,11 @@ public class LoanApplicationReactiveRepositoryAdapter extends ReactiveAdapterOpe
                 .onErrorMap(e -> new RuntimeException("Error al obtener solicitudes aprobadas", e));
     }
 
+    @Override
+    public Mono<LoanApplication> updateStatusLoanApplication(String id, String idState) {
+        return repository.updateStatusLoanApplication(id, idState)
+                .map(entity -> mapper.map(entity, LoanApplication.class))
+                .onErrorMap(e -> new RuntimeException("Error al actualizar estado de solicitud", e));
+    }
+
 }

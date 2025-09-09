@@ -7,6 +7,7 @@ import org.springframework.data.repository.query.Param;
 import org.springframework.data.repository.query.ReactiveQueryByExampleExecutor;
 import org.springframework.data.repository.reactive.ReactiveCrudRepository;
 import reactor.core.publisher.Flux;
+import reactor.core.publisher.Mono;
 
 public interface LoanApplicationReactiveRepository extends
         ReactiveCrudRepository<LoanApplicationEntity, String>,
@@ -32,4 +33,7 @@ public interface LoanApplicationReactiveRepository extends
 
     @Query("SELECT * FROM solicitud WHERE documento_identidad = :identityDocument AND id_estado = 2")
     Flux<LoanApplicationEntity> findApprovedByIdentity(String identityDocument);
+
+    @Query("UPDATE solicitud SET id_estado = :stateId WHERE id_solicitud = :id")
+    Mono<LoanApplicationEntity> updateStatusLoanApplication(String id, String stateId);
 }

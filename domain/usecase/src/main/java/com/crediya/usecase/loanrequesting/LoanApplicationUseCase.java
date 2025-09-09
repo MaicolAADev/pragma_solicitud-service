@@ -8,6 +8,7 @@ import com.crediya.model.loantype.LoanType;
 import com.crediya.model.loantype.gateways.LoanTypeRepository;
 import com.crediya.model.state.State;
 import com.crediya.model.state.gateways.StateRepository;
+import com.crediya.usecase.enums.LoanAction;
 import com.crediya.usecase.exception.ArgumentException;
 import reactor.core.publisher.Mono;
 import reactor.util.annotation.Nullable;
@@ -87,6 +88,24 @@ public class LoanApplicationUseCase implements LoanApplicationInputPort {
                 .doOnError(error -> logger.severe("Error al obtener solicitudes de préstamo: " + error.getMessage()));
     }
 
+
+    public Mono<LoanApplication> updateLoanRequest(String id, String action, String email) {
+        if (!LoanAction.isValidAction(action)) {
+            return Mono.error(new ArgumentException("Acción no válida: " + action));
+        }
+
+        LoanAction loanAction = LoanAction.fromAction(action);
+        String status = loanAction.getStatus();
+        String stateId = loanAction.getStateId();
+
+        return loanApplicationRepository.findById(id)
+                .switchIfEmpty(Mono.error(new ArgumentException("La solicitud de préstamo no existe")))
+                .flatMap(existingApplication -> {
+                    return stateRepository.getStateByName(status)
+                            .switchIfEmpty(Mono.error(new ArgumentException("El estado '" + status + "' no existe en el sistema")))
+                            .then(loanApplicationRepository.updateStatusLoanApplication(id, stateId ));
+                });
+    }
 
     public Mono<LoanApplicationExtended> calculateDebt(LoanApplicationExtended app) {
         return loanApplicationRepository.findApprovedByIdentity(app.getBase().getIdentityDocument())

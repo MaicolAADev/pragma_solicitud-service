@@ -17,4 +17,7 @@ public interface LoanApplicationRepository {
 
     Flux<LoanApplicationWithExtras> findApprovedByIdentity(String identityDocument);
 
+    Mono<LoanApplication> findById(String id);
+
+    Mono<LoanApplication> updateStatusLoanApplication(String id, String idState);
 }

@@ -142,6 +142,32 @@ public class LoanApplicationService {
                 });
     }
 
+    public Mono<LoanApplication> updateLoanRequest(String id, String action, String token) {
+        log.info("Actualizando solicitud de préstamo con ID: {}", id);
+        log.info("Acción: {}", action);
+
+        return validateTokenAndGetUserInfo(token)
+                .flatMap(tokenInfo -> {
+                    if (!"Adviser".equals(tokenInfo.role())) {
+                        log.warn("Solo los usuarios con rol Adviser pueden aprobar o rechazar solicitudes", tokenInfo.role());
+                        return Mono.error(new ForbbidenException("Solo los usuarios con rol Adviser pueden aprobar o rechazar solicitudes"));
+                    }
+
+                    log.debug("Usuario Adviser autenticado: {}", tokenInfo.email());
+
+                    return loanApplicationInputPort.updateLoanRequest(id, action, tokenInfo.email());
+                })
+                .onErrorResume(error -> {
+                    if(!(error instanceof ForbbidenException) && !(error instanceof UnhautorizedException))
+                    {
+                        log.error("Error en updateLoanRequest: {}", error.getMessage());
+                        return Mono.error(new RuntimeException("No se pudo actualizar la solicitud: " + error.getMessage()));
+                    }
+                    return Mono.error(error);
+                });
+
+    }
+
     private Mono<TokenInfoResponse> validateTokenAndGetUserInfo(String token) {
         String validateTokenUrl = authBaseUrl + "/api/v1/validate-token";
         log.debug("Validando token en URL: {}", validateTokenUrl);

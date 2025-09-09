@@ -55,6 +55,16 @@ public class Handler {
                 });
     }
 
+    public Mono<ServerResponse> listenUpdateLoanApplication(ServerRequest serverRequest) {
+        log.debug("Recibiendo petición para actualizar solicitud de préstamo");
+        String token = serverRequest.headers().firstHeader("Authorization");
+        String id = serverRequest.pathVariable("id");
+        String action = serverRequest.pathVariable("action");
+        return loanApplicationService.updateLoanRequest(id, action, token)
+                .flatMap(loanApplication -> ServerResponse.ok().bodyValue(loanApplication))
+                .onErrorResume(error -> handleException(error));
+    }
+
     private Mono<ServerResponse> handleException(Throwable error) {
         if (error instanceof ArgumentException) {
             log.warn("Parámetro inválido: {}", error.getMessage());
@@ -95,7 +105,7 @@ public class Handler {
             return ServerResponse.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .bodyValue(Map.of(
                             "error", "INTERNAL_SERVER_ERROR",
-                            "errors", new String[]{"Ocurrió un error inesperado"}
+                            "errors", new String[]{error.getMessage()}
                     ));
         }
     }

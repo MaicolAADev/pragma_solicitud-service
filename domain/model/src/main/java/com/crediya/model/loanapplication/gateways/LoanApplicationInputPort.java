@@ -12,4 +12,6 @@ public interface LoanApplicationInputPort {
 
     Mono<List<LoanApplicationExtended>> findByStates(
             int page, int size, @Nullable String email, @Nullable String loanType, @Nullable String status);
+
+    Mono<LoanApplication> updateLoanRequest(String id, String action, String email);
 }
