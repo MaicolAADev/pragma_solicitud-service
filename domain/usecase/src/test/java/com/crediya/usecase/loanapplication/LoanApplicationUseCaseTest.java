@@ -8,6 +8,7 @@ import com.crediya.model.loantype.LoanType;
 import com.crediya.model.loantype.gateways.LoanTypeRepository;
 import com.crediya.model.state.State;
 import com.crediya.model.state.gateways.StateRepository;
+import com.crediya.usecase.exception.ArgumentException;
 import com.crediya.usecase.loanrequesting.LoanApplicationUseCase;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -16,6 +17,7 @@ import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
 
 import java.math.BigDecimal;
+import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -233,12 +235,335 @@ class LoanApplicationUseCaseTest {
         assertTrue(result.compareTo(BigDecimal.ZERO) > 0);
     }
 
+    @Test
+    void shouldHandleNullInterestRateInCalculateMonthlyPayment() throws Exception {
+        BigDecimal result = useCaseTestHelper_calculateMonthlyPayment(BigDecimal.valueOf(1000), 12, null);
+        assertEquals(BigDecimal.valueOf(83.33).setScale(2), result);
+    }
+
+    @Test
+    void shouldHandleZeroInterestRateInCalculateMonthlyPayment() throws Exception {
+        BigDecimal result = useCaseTestHelper_calculateMonthlyPayment(BigDecimal.valueOf(1200), 12, BigDecimal.ZERO);
+        assertEquals(BigDecimal.valueOf(100.00).setScale(2), result);
+    }
+
+
+    @Test
+    void shouldHandleCalculateDebtWithNullValues() {
+        LoanApplicationExtended app = new LoanApplicationExtended(new LoanApplicationWithExtras());
+        app.getBase().setIdentityDocument("TEST123");
+
+        when(loanApplicationRepository.findApprovedByIdentity("TEST123"))
+                .thenReturn(Flux.empty());
+
+        StepVerifier.create(useCase.calculateDebt(app))
+                .expectNextMatches(result ->
+                        result.getTotalMonthlyDebt().equals(BigDecimal.ZERO))
+                .verifyComplete();
+    }
+
+    @Test
+    void shouldCalculateDebtWithMultipleApprovedLoans() {
+        LoanApplicationWithExtras approvedLoan1 = new LoanApplicationWithExtras();
+        approvedLoan1.setAmount(BigDecimal.valueOf(1000));
+        approvedLoan1.setTerm(12);
+        approvedLoan1.setLoanTypeId("1");
+
+        LoanApplicationWithExtras approvedLoan2 = new LoanApplicationWithExtras();
+        approvedLoan2.setAmount(BigDecimal.valueOf(2000));
+        approvedLoan2.setTerm(24);
+        approvedLoan2.setLoanTypeId("2");
+
+        LoanApplicationExtended app = new LoanApplicationExtended(new LoanApplicationWithExtras());
+        app.getBase().setIdentityDocument("TEST123");
+        app.setInterestRate(BigDecimal.valueOf(10));
+
+        LoanType loanType1 = new LoanType();
+        loanType1.setLoanTypeId(1);
+        loanType1.setInterestRate(BigDecimal.valueOf(5));
+
+        LoanType loanType2 = new LoanType();
+        loanType2.setLoanTypeId(2);
+        loanType2.setInterestRate(BigDecimal.valueOf(8));
+
+        when(loanApplicationRepository.findApprovedByIdentity("TEST123"))
+                .thenReturn(Flux.just(approvedLoan1, approvedLoan2));
+
+        when(loanTypeRepository.getLoanTypeById(1))
+                .thenReturn(Mono.just(loanType1));
+
+        when(loanTypeRepository.getLoanTypeById(2))
+                .thenReturn(Mono.just(loanType2));
+
+        StepVerifier.create(useCase.calculateDebt(app))
+                .expectNextMatches(result ->
+                        result.getTotalMonthlyDebt().compareTo(BigDecimal.ZERO) > 0)
+                .verifyComplete();
+    }
+
+    @Test
+    void shouldHandleCalculateDebtWhenLoanTypeNotFound() {
+        LoanApplicationWithExtras approvedLoan = new LoanApplicationWithExtras();
+        approvedLoan.setAmount(BigDecimal.valueOf(1000));
+        approvedLoan.setTerm(12);
+        approvedLoan.setLoanTypeId("99"); // No existe
+
+        LoanApplicationExtended app = new LoanApplicationExtended(new LoanApplicationWithExtras());
+        app.getBase().setIdentityDocument("TEST123");
+        app.setInterestRate(BigDecimal.valueOf(10));
+
+        when(loanApplicationRepository.findApprovedByIdentity("TEST123"))
+                .thenReturn(Flux.just(approvedLoan));
+
+        when(loanTypeRepository.getLoanTypeById(99))
+                .thenReturn(Mono.empty());
+
+        StepVerifier.create(useCase.calculateDebt(app))
+                .expectNextMatches(result ->
+                        result.getTotalMonthlyDebt().compareTo(BigDecimal.ZERO) > 0)
+                .verifyComplete();
+    }
+
+    @Test
+    void shouldHandleEmptyResponseFromFindApprovedByIdentity() {
+        LoanApplicationExtended app = new LoanApplicationExtended(new LoanApplicationWithExtras());
+        app.getBase().setIdentityDocument("EMPTY");
+
+        when(loanApplicationRepository.findApprovedByIdentity("EMPTY"))
+                .thenReturn(Flux.empty());
+
+        StepVerifier.create(useCase.calculateDebt(app))
+                .expectNextMatches(result ->
+                        result.getTotalMonthlyDebt().equals(BigDecimal.ZERO))
+                .verifyComplete();
+    }
+
+    @Test
+    void shouldHandleErrorInFindApprovedByIdentity() {
+        LoanApplicationExtended app = new LoanApplicationExtended(new LoanApplicationWithExtras());
+        app.getBase().setIdentityDocument("ERROR");
+
+        when(loanApplicationRepository.findApprovedByIdentity("ERROR"))
+                .thenReturn(Flux.error(new RuntimeException("Database error")));
+
+        StepVerifier.create(useCase.calculateDebt(app))
+                .expectError(RuntimeException.class)
+                .verify();
+    }
+
+    @Test
+    void shouldHandleNullAmountInApprovedLoan() {
+        LoanApplicationWithExtras approvedLoan = new LoanApplicationWithExtras();
+        approvedLoan.setAmount(null);
+        approvedLoan.setTerm(12);
+        approvedLoan.setLoanTypeId("1");
+
+        LoanApplicationExtended app = new LoanApplicationExtended(new LoanApplicationWithExtras());
+        app.getBase().setIdentityDocument("TEST123");
+        app.setInterestRate(BigDecimal.valueOf(10));
+
+        when(loanApplicationRepository.findApprovedByIdentity("TEST123"))
+                .thenReturn(Flux.just(approvedLoan));
+
+        when(loanTypeRepository.getLoanTypeById(1))
+                .thenReturn(Mono.just(new LoanType()));
+
+        StepVerifier.create(useCase.calculateDebt(app))
+                .expectNextMatches(result ->
+                        result.getTotalMonthlyDebt().equals(BigDecimal.ZERO))
+                .verifyComplete();
+    }
+
+    @Test
+    void shouldHandleNullTermInApprovedLoan() {
+        LoanApplicationWithExtras approvedLoan = new LoanApplicationWithExtras();
+        approvedLoan.setAmount(BigDecimal.valueOf(1000));
+        approvedLoan.setTerm(null);
+        approvedLoan.setLoanTypeId("1");
+
+        LoanApplicationExtended app = new LoanApplicationExtended(new LoanApplicationWithExtras());
+        app.getBase().setIdentityDocument("TEST123");
+        app.setInterestRate(BigDecimal.valueOf(10));
+
+        when(loanApplicationRepository.findApprovedByIdentity("TEST123"))
+                .thenReturn(Flux.just(approvedLoan));
+
+        when(loanTypeRepository.getLoanTypeById(1))
+                .thenReturn(Mono.just(new LoanType()));
+
+        StepVerifier.create(useCase.calculateDebt(app))
+                .expectNextMatches(result ->
+                        result.getTotalMonthlyDebt().equals(BigDecimal.ZERO))
+                .verifyComplete();
+    }
+
+    @Test
+    void shouldHandleZeroTermInApprovedLoan() {
+        LoanApplicationWithExtras approvedLoan = new LoanApplicationWithExtras();
+        approvedLoan.setAmount(BigDecimal.valueOf(1000));
+        approvedLoan.setTerm(0);
+        approvedLoan.setLoanTypeId("1");
+
+        LoanApplicationExtended app = new LoanApplicationExtended(new LoanApplicationWithExtras());
+        app.getBase().setIdentityDocument("TEST123");
+        app.setInterestRate(BigDecimal.valueOf(10));
+
+        when(loanApplicationRepository.findApprovedByIdentity("TEST123"))
+                .thenReturn(Flux.just(approvedLoan));
+
+        when(loanTypeRepository.getLoanTypeById(1))
+                .thenReturn(Mono.just(new LoanType()));
+
+        StepVerifier.create(useCase.calculateDebt(app))
+                .expectNextMatches(result ->
+                        result.getTotalMonthlyDebt().equals(BigDecimal.ZERO))
+                .verifyComplete();
+    }
+
+    @Test
+    void shouldHandleFindByStatesWithEmptyRepositoryResponse() {
+        when(loanApplicationRepository.findByStateIds(eq(0), eq(10), any(), any(), any()))
+                .thenReturn(Flux.empty());
+
+        StepVerifier.create(useCase.findByStates(0, 10, null, null, null))
+                .expectNext(List.of())
+                .verifyComplete();
+    }
+
+    @Test
+    void shouldHandleFindByStatesWithError() {
+        when(loanApplicationRepository.findByStateIds(eq(0), eq(10), any(), any(), any()))
+                .thenReturn(Flux.error(new RuntimeException("Database error")));
+
+        StepVerifier.create(useCase.findByStates(0, 10, null, null, null))
+                .expectError(RuntimeException.class)
+                .verify();
+    }
+
+    @Test
+    void shouldHandleFindByStatesWithSpecificEmailFilter() {
+        LoanApplicationWithExtras baseApp = new LoanApplicationWithExtras();
+        baseApp.setLoanTypeId("1");
+        baseApp.setStateId("1");
+        baseApp.setIdentityDocument("123456");
+
+        when(loanApplicationRepository.findByStateIds(eq(0), eq(10), eq("test@email.com"), any(), any()))
+                .thenReturn(Flux.just(baseApp));
+
+        when(loanTypeRepository.getLoanTypeById(1))
+                .thenReturn(Mono.just(new LoanType()));
+
+        when(stateRepository.getStateById("1"))
+                .thenReturn(Mono.just(new State()));
+
+        when(loanApplicationRepository.findApprovedByIdentity("123456"))
+                .thenReturn(Flux.empty());
+
+        StepVerifier.create(useCase.findByStates(0, 10, "test@email.com", null, null))
+                .expectNextMatches(list -> list.size() == 1)
+                .verifyComplete();
+    }
+
+    @Test
+    void shouldHandleFindByStatesWithSpecificLoanTypeFilter() {
+        LoanApplicationWithExtras baseApp = new LoanApplicationWithExtras();
+        baseApp.setLoanTypeId("1");
+        baseApp.setStateId("1");
+        baseApp.setIdentityDocument("123456");
+
+        when(loanApplicationRepository.findByStateIds(eq(0), eq(10), any(), eq("Personal"), any()))
+                .thenReturn(Flux.just(baseApp));
+
+        when(loanTypeRepository.getLoanTypeById(1))
+                .thenReturn(Mono.just(new LoanType()));
+
+        when(stateRepository.getStateById("1"))
+                .thenReturn(Mono.just(new State()));
+
+        when(loanApplicationRepository.findApprovedByIdentity("123456"))
+                .thenReturn(Flux.empty());
+
+        StepVerifier.create(useCase.findByStates(0, 10, null, "Personal", null))
+                .expectNextMatches(list -> list.size() == 1)
+                .verifyComplete();
+    }
+
+    @Test
+    void shouldHandleFindByStatesWithSpecificStatusFilter() {
+        LoanApplicationWithExtras baseApp = new LoanApplicationWithExtras();
+        baseApp.setLoanTypeId("1");
+        baseApp.setStateId("1");
+        baseApp.setIdentityDocument("123456");
+
+        when(loanApplicationRepository.findByStateIds(eq(0), eq(10), any(), any(), eq("Approved")))
+                .thenReturn(Flux.just(baseApp));
+
+        when(loanTypeRepository.getLoanTypeById(1))
+                .thenReturn(Mono.just(new LoanType()));
+
+        when(stateRepository.getStateById("1"))
+                .thenReturn(Mono.just(new State()));
+
+        when(loanApplicationRepository.findApprovedByIdentity("123456"))
+                .thenReturn(Flux.empty());
+
+        StepVerifier.create(useCase.findByStates(0, 10, null, null, "Approved"))
+                .expectNextMatches(list -> list.size() == 1)
+                .verifyComplete();
+    }
+
+    @Test
+    void shouldValidateAmountWithNegativeValue() {
+        LoanApplication application = buildApplication(BigDecimal.valueOf(-100));
+        LoanType loanType = buildLoanType(BigDecimal.valueOf(100), BigDecimal.valueOf(1000));
+        State state = buildState();
+
+        when(loanTypeRepository.getLoanTypeByName("Personal")).thenReturn(Mono.just(loanType));
+        when(stateRepository.getStateByName("Pendiente de revisión")).thenReturn(Mono.just(state));
+
+        StepVerifier.create(useCase.save(application))
+                .expectErrorMatches(e -> e instanceof ArgumentException
+                        && e.getMessage().contains("El monto debe ser mayor que cero"))
+                .verify();
+    }
+
+    @Test
+    void shouldValidateAmountWithExactlyMinAmount() {
+        LoanApplication application = buildApplication(BigDecimal.valueOf(100));
+        LoanType loanType = buildLoanType(BigDecimal.valueOf(100), BigDecimal.valueOf(1000));
+        State state = buildState();
+
+        when(loanTypeRepository.getLoanTypeByName("Personal")).thenReturn(Mono.just(loanType));
+        when(stateRepository.getStateByName("Pendiente de revisión")).thenReturn(Mono.just(state));
+        when(loanApplicationRepository.save(any(), any(), any()))
+                .thenReturn(Mono.just(application));
+
+        StepVerifier.create(useCase.save(application))
+                .expectNextCount(1)
+                .verifyComplete();
+    }
+
+    @Test
+    void shouldValidateAmountWithExactlyMaxAmount() {
+        LoanApplication application = buildApplication(BigDecimal.valueOf(1000));
+        LoanType loanType = buildLoanType(BigDecimal.valueOf(100), BigDecimal.valueOf(1000));
+        State state = buildState();
+
+        when(loanTypeRepository.getLoanTypeByName("Personal")).thenReturn(Mono.just(loanType));
+        when(stateRepository.getStateByName("Pendiente de revisión")).thenReturn(Mono.just(state));
+        when(loanApplicationRepository.save(any(), any(), any()))
+                .thenReturn(Mono.just(application));
+
+        StepVerifier.create(useCase.save(application))
+                .expectNextCount(1)
+                .verifyComplete();
+    }
+
     private BigDecimal useCaseTestHelper_calculateMonthlyPayment(BigDecimal principal, Integer term, BigDecimal rate) throws Exception {
         var method = LoanApplicationUseCase.class.getDeclaredMethod("calculateMonthlyPayment", BigDecimal.class, Integer.class, BigDecimal.class);
         method.setAccessible(true);
         return (BigDecimal) method.invoke(useCase, principal, term, rate);
     }
-
 
 }
 

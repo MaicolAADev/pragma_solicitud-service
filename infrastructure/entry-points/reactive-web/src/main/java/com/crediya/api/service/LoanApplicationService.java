@@ -67,7 +67,7 @@ public class LoanApplicationService {
                             })
                             .onErrorResume(error -> {
                                 log.error("Fallo al obtener usuario: {}", error.getMessage());
-                                return Mono.error(new RuntimeException("No se pudo registrar la solicitud: " + error.getMessage()));
+                                return Mono.error(new ArgumentException("No se pudo registrar la solicitud: " + error.getMessage()));
                             });
                 });
     }
@@ -105,8 +105,12 @@ public class LoanApplicationService {
                             });
                 })
                 .onErrorResume(error -> {
-                    log.error("Error en listApplicationsForReview: {}", error.getMessage());
-                    return Mono.error(new RuntimeException("No se pudieron listar las solicitudes: " + error.getMessage()));
+                    if(!(error instanceof ForbbidenException) && !(error instanceof UnhautorizedException))
+                    {
+                        log.error("Error en listApplicationsForReview: {}", error.getMessage());
+                        return Mono.error(new RuntimeException("No se pudieron listar las solicitudes: " + error.getMessage()));
+                    }
+                    return Mono.error(error);
                 });
     }
 

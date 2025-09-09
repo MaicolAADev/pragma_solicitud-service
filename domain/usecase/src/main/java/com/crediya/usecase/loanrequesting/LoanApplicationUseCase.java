@@ -88,7 +88,7 @@ public class LoanApplicationUseCase implements LoanApplicationInputPort {
     }
 
 
-    private Mono<LoanApplicationExtended> calculateDebt(LoanApplicationExtended app) {
+    public Mono<LoanApplicationExtended> calculateDebt(LoanApplicationExtended app) {
         return loanApplicationRepository.findApprovedByIdentity(app.getBase().getIdentityDocument())
                 .flatMap(loan ->
                         {

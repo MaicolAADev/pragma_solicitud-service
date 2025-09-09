@@ -3,12 +3,21 @@ package com.crediya.api;
 import com.crediya.api.dto.CreateLoanApplicationDTO;
 import com.crediya.api.mapper.LoanApplicationMapper;
 import com.crediya.api.service.LoanApplicationService;
+import com.crediya.usecase.exception.ArgumentException;
+import com.crediya.usecase.exception.ForbbidenException;
+import com.crediya.usecase.exception.UnhautorizedException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Component;
 import org.springframework.web.reactive.function.server.ServerRequest;
 import org.springframework.web.reactive.function.server.ServerResponse;
 import reactor.core.publisher.Mono;
+
+import java.util.Map;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 @Component
 @RequiredArgsConstructor
@@ -25,7 +34,8 @@ public class Handler {
                 .map(loanApplicationMapper::toModel)
                 .flatMap(loanApplication -> loanApplicationService.saveLoanRequest(loanApplication, token))
                 .map(loanApplicationMapper::toResponse)
-                .flatMap(loanApplicationResponse -> ServerResponse.ok().bodyValue(loanApplicationResponse));
+                .flatMap(loanApplicationResponse -> ServerResponse.ok().bodyValue(loanApplicationResponse))
+                .onErrorResume(error -> handleException(error));
     }
 
     public Mono<ServerResponse> listenListApplicationsForReview(ServerRequest serverRequest) {
@@ -38,6 +48,55 @@ public class Handler {
         String status = serverRequest.queryParam("estado").orElse(null);
 
         return loanApplicationService.listApplicationsForReview(page, size, token, email, loanType, status)
-                .flatMap(applications -> ServerResponse.ok().bodyValue(applications));
+                .flatMap(applications -> ServerResponse.ok().bodyValue(applications))
+                .onErrorResume(error -> {
+                    log.error("Error en listenListApplicationsForReview: {}", error.getMessage());
+                   return handleException(error);
+                });
+    }
+
+    private Mono<ServerResponse> handleException(Throwable error) {
+        if (error instanceof ArgumentException) {
+            log.warn("Parámetro inválido: {}", error.getMessage());
+            return ServerResponse.badRequest()
+                    .bodyValue(Map.of(
+                            "error", "INVALID_PARAMS",
+                            "errors", new String[]{error.getMessage()}
+                    ));
+        } else if (error instanceof ForbbidenException) {
+            log.warn("Acceso denegado: {}", error.getMessage());
+            return ServerResponse.status(HttpStatus.FORBIDDEN)
+                    .bodyValue(Map.of(
+                            "error", "FORBIDDEN",
+                            "errors", new String[]{error.getMessage()}
+                    ));
+        } else if (error instanceof UnhautorizedException) {
+            log.warn("Acceso no autorizado: {}", error.getMessage());
+            return ServerResponse.status(HttpStatus.UNAUTHORIZED)
+                    .bodyValue(Map.of(
+                            "error", "UNAUTHORIZED",
+                            "errors", new String[]{error.getMessage()}
+                    ));
+        } else {
+            log.error("Error inesperado: {}", error.getMessage(), error);
+
+            if (error.getMessage() != null) {
+                Pattern pattern = Pattern.compile("\"status\":401");
+                Matcher matcher = pattern.matcher(error.getMessage());
+                if (matcher.find()) {
+                    return ServerResponse.status(HttpStatus.UNAUTHORIZED)
+                            .bodyValue(Map.of(
+                                    "error", "UNAUTHORIZED",
+                                    "errors", new String[]{error.getMessage()}
+                            ));
+                }
+            }
+
+            return ServerResponse.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .bodyValue(Map.of(
+                            "error", "INTERNAL_SERVER_ERROR",
+                            "errors", new String[]{"Ocurrió un error inesperado"}
+                    ));
+        }
     }
 }
