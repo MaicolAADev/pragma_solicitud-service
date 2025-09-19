@@ -40,10 +40,11 @@ adapters:
   r2dbc:
     host: "localhost"
     port: 5432
-    database: "p_solicitudes"
+    database: "solicitudes"
     schema: "public"
     username: "postgres"
-    password: "1234"
+    password: "postgres"
+
 services:
   auth:
     base-url: http://localhost:8081
